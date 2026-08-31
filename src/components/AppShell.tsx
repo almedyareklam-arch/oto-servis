@@ -1,0 +1,2 @@
+import {Sidebar} from './Sidebar';
+export function AppShell({title,subtitle,children}:{title:string,subtitle:string,children:React.ReactNode}){return <div className="shell"><Sidebar/><main className="main"><header className="top"><div><h1>{title}</h1><div className="muted">{subtitle}</div></div><div className="topright"><input className="search" placeholder="Plaka, müşteri, iş emri ara..."/><span className="avatar">AP</span></div></header>{children}</main></div>}
