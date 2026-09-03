@@ -31,6 +31,10 @@ jobs:
         working-directory: ucuzcu-android
         run: python3 v7_patch.py
 
+      - name: Apply V8 typo tolerance
+        working-directory: ucuzcu-android
+        run: python3 v8_patch.py
+
       - name: Download Gradle
         run: |
           curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
