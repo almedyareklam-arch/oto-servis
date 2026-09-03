@@ -39,6 +39,15 @@ public class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(99, 110, 104);
     private static final int BG = Color.rgb(247, 249, 248);
 
+    private final String[][] sources = new String[][]{
+            {"Akakçe", "https://www.akakce.com/arama/?q="},
+            {"Cimri", "https://www.cimri.com/arama?q="},
+            {"Trendyol", "https://www.trendyol.com/sr?q="},
+            {"Hepsiburada", "https://www.hepsiburada.com/ara?q="},
+            {"N11", "https://www.n11.com/arama?q="},
+            {"Amazon Türkiye", "https://www.amazon.com.tr/s?k="}
+    };
+
     private EditText searchInput;
     private Button searchButton;
     private TextView statusText;
@@ -47,16 +56,18 @@ public class MainActivity extends Activity {
     private ProgressBar progressBar;
     private final Handler handler = new Handler(Looper.getMainLooper());
 
+    private final List<Offer> collected = new ArrayList<>();
     private int searchId = 0;
-    private int stage = 0;
+    private int sourceIndex = 0;
+    private boolean scanning = false;
+    private boolean extracting = false;
     private String currentQuery = "";
-    private String sourceSearchUrl = "";
-    private String selectedProductUrl = "";
 
     private static class Offer {
         double price;
         String priceText;
-        String seller;
+        String source;
+        String title;
         String detail;
         String url;
     }
@@ -83,14 +94,14 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(title, fullWidth(dp(58)));
 
-        TextView subtitle = text("Ürünü yaz. Ucuzcu doğru ürünü bulup en ucuz satıcıları sıralasın.", 16, Color.rgb(74, 88, 80), false);
+        TextView subtitle = text("Ne arıyorsan yaz. Ucuzcu farklı kaynakları tarayıp en ucuz seçenekleri bulsun.", 16, Color.rgb(74, 88, 80), false);
         subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
         LinearLayout.LayoutParams sp = fullWidth(-2);
         sp.setMargins(0, dp(4), 0, dp(20));
         root.addView(subtitle, sp);
 
         searchInput = new EditText(this);
-        searchInput.setHint("Örn: Samsung Galaxy S26 256 GB");
+        searchInput.setHint("Örn: Bosch matkap, Nike Air Max 42, Samsung S26");
         searchInput.setTextSize(17);
         searchInput.setSingleLine(true);
         searchInput.setPadding(dp(16), 0, dp(16), 0);
@@ -111,7 +122,7 @@ public class MainActivity extends Activity {
         LinearLayout statusRow = new LinearLayout(this);
         statusRow.setOrientation(LinearLayout.HORIZONTAL);
         statusRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams srp = fullWidth(dp(54));
+        LinearLayout.LayoutParams srp = fullWidth(dp(58));
         srp.setMargins(0, dp(12), 0, dp(4));
         root.addView(statusRow, srp);
 
@@ -120,11 +131,11 @@ public class MainActivity extends Activity {
         progressBar.setVisibility(View.GONE);
         statusRow.addView(progressBar, new LinearLayout.LayoutParams(dp(34), dp(34)));
 
-        statusText = text("Hazır. Bir ürün yazıp aramayı başlat.", 13, MUTED, false);
+        statusText = text("Hazır. Aradığın ürünü yaz.", 13, MUTED, false);
         statusText.setPadding(dp(8), 0, 0, 0);
-        statusRow.addView(statusText, new LinearLayout.LayoutParams(0, dp(54), 1f));
+        statusRow.addView(statusText, new LinearLayout.LayoutParams(0, dp(58), 1f));
 
-        TextView info = text("V3 Beta • Ürün adı doğrulanmadan fiyat gösterilmez. Yanlış ürün eşleşirse sonuç reddedilir.", 12, Color.rgb(117, 126, 121), false);
+        TextView info = text("V4 Beta • Çoklu kaynak taraması. Model/ölçü gibi sayı içeren ifadeler eşleşmeden sonuç kabul edilmez.", 12, Color.rgb(117, 126, 121), false);
         LinearLayout.LayoutParams infop = fullWidth(-2);
         infop.setMargins(0, 0, 0, dp(12));
         root.addView(info, infop);
@@ -147,149 +158,181 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setLoadsImagesAutomatically(false);
         s.setBlockNetworkImage(true);
-        s.setUserAgentString("Mozilla/5.0 (Linux; Android 16; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Mobile Safari/537.36 Ucuzcu/0.3");
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 16; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Mobile Safari/537.36 Ucuzcu/0.4");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                if (!scanning || extracting || sourceIndex >= sources.length) return;
                 final int id = searchId;
+                final int idx = sourceIndex;
+                extracting = true;
                 handler.postDelayed(() -> {
-                    if (id != searchId) return;
-                    if (stage == 1) findProductPage();
-                    else if (stage == 2) extractOffers();
-                }, 1000);
+                    if (id == searchId && scanning && idx == sourceIndex) extractCurrentSource();
+                }, 1300);
             }
         });
     }
 
     private void showWelcome() {
         resultsContainer.removeAllViews();
-        TextView t = text("🔎 Modeli net yaz.\nÖrnek: Samsung Galaxy S26 256 GB Siyah", 15, Color.rgb(62, 72, 67), false);
+        TextView t = text("🔎 İstediğin ürünü normal şekilde yaz.\nÖrnek: 205 55 R16 lastik • A4 kağıt 80 gr • Philips kahve makinesi", 15, Color.rgb(62, 72, 67), false);
         t.setGravity(Gravity.CENTER_HORIZONTAL);
         t.setPadding(0, dp(24), 0, dp(8));
-        resultsContainer.addView(t, fullWidth(dp(90)));
+        resultsContainer.addView(t, fullWidth(dp(100)));
     }
 
     private void startSearch() {
         String q = searchInput.getText().toString().trim();
-        if (q.length() < 3) {
-            searchInput.setError("Ürün adını biraz daha açık yaz.");
+        if (q.length() < 2) {
+            searchInput.setError("Aramak istediğin ürünü yaz.");
             searchInput.requestFocus();
             return;
         }
+
         currentQuery = q;
-        sourceSearchUrl = "https://www.akakce.com/arama/?q=" + Uri.encode(q);
-        selectedProductUrl = "";
-        stage = 1;
+        collected.clear();
+        sourceIndex = 0;
         searchId++;
-        final int id = searchId;
+        scanning = true;
+        extracting = false;
         resultsContainer.removeAllViews();
-        setSearching(true, "Doğru ürün aranıyor…");
-        webView.loadUrl(sourceSearchUrl);
-        handler.postDelayed(() -> {
-            if (id == searchId && stage != 0) showFailure("Tarama zaman aşımına uğradı.");
-        }, 25000);
+        setSearching(true, "Kaynaklar hazırlanıyor…");
+        loadCurrentSource();
     }
 
-    private void findProductPage() {
-        if (stage != 1) return;
+    private void loadCurrentSource() {
+        if (!scanning) return;
+        if (sourceIndex >= sources.length) {
+            finishSearch();
+            return;
+        }
+
+        extracting = false;
+        String source = sources[sourceIndex][0];
+        String url = sources[sourceIndex][1] + Uri.encode(currentQuery);
+        setSearching(true, (sourceIndex + 1) + "/" + sources.length + " • " + source + " taranıyor…");
+        final int id = searchId;
+        final int idx = sourceIndex;
+        webView.stopLoading();
+        webView.loadUrl(url);
+
+        handler.postDelayed(() -> {
+            if (id == searchId && scanning && idx == sourceIndex) {
+                sourceIndex++;
+                extracting = false;
+                loadCurrentSource();
+            }
+        }, 9000);
+    }
+
+    private void extractCurrentSource() {
+        if (!scanning || sourceIndex >= sources.length) return;
+        final int id = searchId;
+        final int idx = sourceIndex;
+        final String sourceName = sources[idx][0];
         String q = JSONObject.quote(currentQuery);
+        String source = JSONObject.quote(sourceName);
+
         String script = "(function(){" +
                 "function n(s){return (s||'').toLocaleLowerCase('tr-TR').replace(/[\\-_\\/]+/g,' ').replace(/[^a-z0-9çğıöşü ]/gi,' ').replace(/\\s+/g,' ').trim();}" +
-                "function ignored(x){return ['gb','tb','ram','telefon','cep','akilli','akıllı','siyah','beyaz','mavi','gri','yesil','yeşil','kirmizi','kırmızı'].indexOf(x)>=0;}" +
-                "var raw=n(" + q + ");var req=raw.split(' ').filter(function(x){return x.length>1&&!ignored(x);});" +
-                "var best=null,bestScore=-1;" +
-                "Array.prototype.slice.call(document.querySelectorAll('a[href]')).forEach(function(a){" +
-                "var href=a.href||'';if(href.indexOf('akakce.com')<0)return;if(href.indexOf('fiyati')<0&&href.indexOf('en-ucuz')<0)return;" +
-                "var bits=[a.innerText,a.title,a.getAttribute('aria-label'),href];var im=a.querySelector('img[alt]');if(im)bits.push(im.alt);" +
-                "var p=a.parentElement,depth=0;while(p&&depth<4){var pt=(p.innerText||'').trim();if(pt.length>5&&pt.length<500){bits.push(pt);break;}p=p.parentElement;depth++;}" +
-                "var hay=n(bits.join(' '));var hit=0;var numericOk=true;req.forEach(function(tok){var has=hay.indexOf(tok)>=0;if(has)hit++;if(/[0-9]/.test(tok)&&!has)numericOk=false;});" +
-                "if(!numericOk)return;var need=req.length<=1?1:2;if(hit<need)return;" +
-                "var first=req.length?req[0]:'';if(first&&/[a-zçğıöşü]/i.test(first)&&hay.indexOf(first)<0)return;" +
-                "var score=hit*10;if(hay.indexOf(raw)>=0)score+=25;req.forEach(function(tok){if(n(href).indexOf(tok)>=0)score+=4;});" +
-                "if(score>bestScore){bestScore=score;best={url:href,score:score,hit:hit,total:req.length};}" +
-                "});return best?JSON.stringify(best):null;})()";
+                "function clean(s){return (s||'').replace(/\\s+/g,' ').trim();}" +
+                "function money(s){var m=s.match(/(\\d{1,3}(?:[.\\s]\\d{3})*(?:,\\d{2})?|\\d{2,9}(?:,\\d{2})?)\\s*(?:TL|₺)/i);if(!m)return null;var r=m[1].replace(/\\s/g,'');var num=parseFloat(r.replace(/\\./g,'').replace(',','.'));if(!isFinite(num)||num<1||num>100000000)return null;return {num:num,txt:m[1]+' TL'};}" +
+                "var raw=n(" + q + ");var toks=raw.split(' ').filter(function(x){return x.length>0;});" +
+                "var stop={'en':1,'ucuz':1,'fiyat':1,'fiyati':1,'fiyatı':1,'urun':1,'ürün':1,'satın':1,'al':1,'yeni':1,'orijinal':1};" +
+                "var req=toks.filter(function(x){return !stop[x];});if(!req.length)req=toks;" +
+                "function match(txt){var h=n(txt);if(!h)return false;var hits=0,words=0;for(var i=0;i<req.length;i++){var tok=req[i],has=h.indexOf(tok)>=0;if(/[0-9]/.test(tok)&&!has)return false;if(!/[0-9]/.test(tok)){words++;if(has)hits++;}}var need=words<=1?Math.min(words,1):Math.ceil(words*0.6);return hits>=need;}" +
+                "var selector='article,li,[data-testid*=product],[data-test*=product],[class*=product],[class*=Product],[class*=prd],[class*=p-card],[class*=search-result],[class*=searchResult],[class*=s-result-item]';" +
+                "var nodes=Array.prototype.slice.call(document.querySelectorAll(selector));if(nodes.length>1200)nodes=nodes.slice(0,1200);var out=[],seen={};" +
+                "nodes.forEach(function(card){var txt=clean(card.innerText);if(txt.length<8||txt.length>1400)return;if(txt.indexOf('TL')<0&&txt.indexOf('₺')<0)return;var pr=money(txt);if(!pr)return;" +
+                "var te=card.querySelector('h1,h2,h3,h4,[data-testid*=title],[class*=title],[class*=Title],[class*=name],[class*=Name]');var title=clean(te?te.innerText:'');" +
+                "var links=Array.prototype.slice.call(card.querySelectorAll('a[href]'));if(!title){for(var a=0;a<links.length;a++){var at=clean(links[a].innerText);if(at.length>4&&at.length<220){title=at;break;}}}if(!title)title=txt.substring(0,180);" +
+                "if(!match(title+' '+txt.substring(0,450)))return;var href='';for(var j=0;j<links.length;j++){var u=links[j].href||'';if(/^https?:/i.test(u)){href=u;break;}}if(!href)href=location.href;" +
+                "var key=n(title).substring(0,100)+'|'+pr.num+'|'+href;if(seen[key])return;seen[key]=1;out.push({price:pr.num,priceText:pr.txt,source:" + source + ",title:title.substring(0,180),detail:txt.substring(0,240),url:href});" +
+                "});out.sort(function(a,b){return a.price-b.price;});return JSON.stringify(out.slice(0,6));})()";
 
-        final int id = searchId;
         webView.evaluateJavascript(script, value -> {
-            if (id != searchId || stage != 1) return;
+            if (id != searchId || !scanning || idx != sourceIndex) return;
             String decoded = decodeJsString(value);
-            try {
-                if (decoded == null) { showFailure("Aramayla yeterince eşleşen ürün bulunamadı."); return; }
-                JSONObject o = new JSONObject(decoded);
-                String url = o.optString("url", "");
-                if (url.length() < 8) { showFailure("Doğru ürün otomatik seçilemedi."); return; }
-                selectedProductUrl = url;
-                stage = 2;
-                setSearching(true, "Ürün doğrulandı, fiyatlar taranıyor…");
-                webView.loadUrl(url);
-            } catch (Exception e) {
-                showFailure("Ürün eşleştirmesi işlenemedi.");
-            }
+            List<Offer> found = parseOffers(decoded);
+            collected.addAll(found);
+            sourceIndex++;
+            extracting = false;
+            loadCurrentSource();
         });
     }
 
-    private void extractOffers() {
-        if (stage != 2) return;
-        String script = "(function(){" +
-                "function c(s){return (s||'').replace(/\\s+/g,' ').trim();}" +
-                "function price(s){var ms=s.match(/(\\d{1,3}(?:\\.\\d{3})*(?:,\\d{2})?)\\s*TL/ig);if(!ms)return null;for(var i=0;i<ms.length;i++){var r=ms[i].replace(/\\s*TL/i,'');var num=parseFloat(r.replace(/\\./g,'').replace(',','.'));if(num>=10&&num<=10000000)return {txt:r+' TL',num:num};}return null;}" +
-                "var h=document.querySelector('h1');var title=c(h?h.innerText:document.title);var out=[],seen={};" +
-                "Array.prototype.slice.call(document.querySelectorAll('li,article,section,div')).forEach(function(card){" +
-                "var t=c(card.innerText);if(t.length<20||t.length>550||t.indexOf('TL')<0)return;if((t.match(/Satıcıya Git/gi)||[]).length!==1)return;var pr=price(t);if(!pr)return;" +
-                "var links=Array.prototype.slice.call(card.querySelectorAll('a[href]'));var go=links.find(function(a){return /Satıcıya Git/i.test(c(a.innerText));});if(!go)return;" +
-                "var seller='Satıcı';var el=card.querySelector('[class*=merchant],[class*=seller],[class*=store]');if(el){var et=c(el.innerText);if(et.length>1&&et.length<70)seller=et;}" +
-                "if(seller==='Satıcı'){for(var j=0;j<links.length;j++){var lt=c(links[j].innerText);if(lt.length>1&&lt.length<55&&!/Satıcıya Git|Ürün Özellikleri|TL|Son /i.test(lt)){seller=lt;break;}}}" +
-                "var href=go.href||location.href;var key=pr.txt+'|'+seller+'|'+href;if(seen[key])return;seen[key]=1;out.push({price:pr.num,priceText:pr.txt,seller:seller,detail:t.substring(0,220),url:href});" +
-                "});out.sort(function(a,b){return a.price-b.price;});return JSON.stringify({title:title,offers:out.slice(0,10)});})()";
-
-        final int id = searchId;
-        webView.evaluateJavascript(script, value -> {
-            if (id != searchId || stage != 2) return;
-            String decoded = decodeJsString(value);
-            try {
-                JSONObject obj = new JSONObject(decoded == null ? "{}" : decoded);
-                String title = obj.optString("title", "").trim();
-                if (!isProductMatch(currentQuery, title)) {
-                    showFailure("Yanlış ürün eşleşmesi engellendi: " + (title.isEmpty() ? "ürün adı okunamadı" : title));
-                    return;
-                }
-                List<Offer> offers = parseOffers(obj.optJSONArray("offers"));
-                if (offers.isEmpty()) { showFailure("Doğru ürün bulundu ama satıcı fiyatları okunamadı."); return; }
-                stage = 0;
-                showOffers(offers, title);
-            } catch (Exception e) {
-                showFailure("Fiyat verisi işlenemedi.");
+    private List<Offer> parseOffers(String json) {
+        List<Offer> list = new ArrayList<>();
+        if (json == null || json.trim().isEmpty()) return list;
+        try {
+            JSONArray array = new JSONArray(json);
+            for (int i = 0; i < array.length(); i++) {
+                JSONObject o = array.optJSONObject(i);
+                if (o == null) continue;
+                Offer offer = new Offer();
+                offer.price = o.optDouble("price", -1);
+                offer.priceText = o.optString("priceText", "").trim();
+                offer.source = o.optString("source", "Kaynak").trim();
+                offer.title = o.optString("title", "Ürün").trim();
+                offer.detail = o.optString("detail", "").trim();
+                offer.url = o.optString("url", "").trim();
+                if (offer.price > 0 && !offer.priceText.isEmpty() && !offer.url.isEmpty()) list.add(offer);
             }
-        });
+        } catch (Exception ignored) { }
+        return list;
     }
 
-    private boolean isProductMatch(String query, String title) {
+    private void finishSearch() {
+        scanning = false;
+        extracting = false;
+        List<Offer> finalList = cleanAndSort(collected);
+        if (finalList.isEmpty()) {
+            setSearching(false, "Otomatik fiyat sonucu bulunamadı.");
+            showNoResults();
+            return;
+        }
+        if (finalList.size() > 10) finalList = new ArrayList<>(finalList.subList(0, 10));
+        setSearching(false, finalList.size() + " uygun fiyat bulundu • En ucuzdan pahalıya");
+        showOffers(finalList);
+    }
+
+    private List<Offer> cleanAndSort(List<Offer> input) {
+        List<Offer> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (Offer o : input) {
+            if (o == null || o.price <= 0 || !isLikelyMatch(currentQuery, o.title + " " + o.detail)) continue;
+            String key = normalize(o.title) + "|" + Math.round(o.price) + "|" + o.source;
+            if (!seen.add(key)) continue;
+            out.add(o);
+        }
+        Collections.sort(out, Comparator.comparingDouble(a -> a.price));
+        return out;
+    }
+
+    private boolean isLikelyMatch(String query, String text) {
         String q = normalize(query);
-        String t = normalize(title);
+        String t = normalize(text);
         if (q.isEmpty() || t.isEmpty()) return false;
         String[] parts = q.split(" ");
-        List<String> required = new ArrayList<>();
-        for (String p : parts) {
-            if (p.length() <= 1 || isIgnored(p)) continue;
-            required.add(p);
-        }
-        if (required.isEmpty()) return t.contains(q);
+        int wordCount = 0;
         int hit = 0;
-        for (String p : required) {
+        for (String p : parts) {
+            if (p.isEmpty() || isStop(p)) continue;
             boolean has = t.contains(p);
             if (p.matches(".*\\d.*") && !has) return false;
-            if (has) hit++;
+            if (!p.matches(".*\\d.*")) {
+                wordCount++;
+                if (has) hit++;
+            }
         }
-        String first = required.get(0);
-        if (first.matches(".*[a-zçğıöşü].*") && !t.contains(first)) return false;
-        return hit >= (required.size() <= 1 ? 1 : 2);
+        int need = wordCount <= 1 ? Math.min(wordCount, 1) : (int) Math.ceil(wordCount * 0.6);
+        return hit >= need;
     }
 
-    private boolean isIgnored(String p) {
-        return p.equals("gb") || p.equals("tb") || p.equals("ram") || p.equals("telefon") || p.equals("cep") ||
-                p.equals("akilli") || p.equals("akıllı") || p.equals("siyah") || p.equals("beyaz") || p.equals("mavi") ||
-                p.equals("gri") || p.equals("yesil") || p.equals("yeşil") || p.equals("kirmizi") || p.equals("kırmızı");
+    private boolean isStop(String p) {
+        return p.equals("en") || p.equals("ucuz") || p.equals("fiyat") || p.equals("fiyati") || p.equals("fiyatı") ||
+                p.equals("urun") || p.equals("ürün") || p.equals("satın") || p.equals("al") || p.equals("yeni") || p.equals("orijinal");
     }
 
     private String normalize(String s) {
@@ -299,76 +342,133 @@ public class MainActivity extends Activity {
                 .replaceAll("\\s+", " ").trim();
     }
 
-    private List<Offer> parseOffers(JSONArray array) {
-        List<Offer> list = new ArrayList<>();
-        if (array == null) return list;
-        Set<String> seen = new HashSet<>();
-        for (int i = 0; i < array.length(); i++) {
-            JSONObject o = array.optJSONObject(i); if (o == null) continue;
-            double price = o.optDouble("price", -1);
-            String priceText = o.optString("priceText", "").trim();
-            String seller = o.optString("seller", "Satıcı").trim();
-            String detail = o.optString("detail", "").trim();
-            String url = o.optString("url", selectedProductUrl).trim();
-            if (price <= 0 || priceText.isEmpty()) continue;
-            String key = String.format(Locale.US, "%.2f|%s|%s", price, seller, url);
-            if (!seen.add(key)) continue;
-            Offer x = new Offer(); x.price=price; x.priceText=priceText; x.seller=seller.isEmpty()?"Satıcı":seller; x.detail=detail; x.url=url.isEmpty()?selectedProductUrl:url;
-            list.add(x);
-        }
-        Collections.sort(list, Comparator.comparingDouble(a -> a.price));
-        return list.size() > 10 ? new ArrayList<>(list.subList(0,10)) : list;
-    }
-
-    private void showOffers(List<Offer> offers, String productTitle) {
-        setSearching(false, offers.size() + " doğru fiyat bulundu • En ucuzdan pahalıya sıralandı");
+    private void showOffers(List<Offer> offers) {
         resultsContainer.removeAllViews();
-        TextView product = text(productTitle, 19, TEXT, true);
-        LinearLayout.LayoutParams pp = fullWidth(-2); pp.setMargins(0, dp(8), 0, dp(4)); resultsContainer.addView(product, pp);
-        TextView source = text("Kaynak: Akakçe • Ürün eşleşmesi V3 doğrulamasından geçti", 12, MUTED, false);
-        LinearLayout.LayoutParams src = fullWidth(dp(34)); src.setMargins(0,0,0,dp(5)); resultsContainer.addView(source, src);
-        for (int i=0;i<offers.size();i++) addOfferCard(i, offers.get(i));
+        TextView heading = text("“" + currentQuery + "” için en ucuz sonuçlar", 19, TEXT, true);
+        LinearLayout.LayoutParams hp = fullWidth(-2);
+        hp.setMargins(0, dp(8), 0, dp(5));
+        resultsContainer.addView(heading, hp);
+
+        for (int i = 0; i < offers.size(); i++) addOfferCard(i, offers.get(i));
     }
 
     private void addOfferCard(int index, Offer offer) {
-        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL); card.setPadding(dp(14),dp(12),dp(12),dp(12)); card.setBackgroundColor(Color.WHITE);
-        LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL); card.addView(top, fullWidth(dp(46)));
-        TextView rank = text(index==0?"🥇":(index+1)+".", index==0?22:18, TEXT, true); top.addView(rank,new LinearLayout.LayoutParams(dp(46),dp(46)));
-        TextView seller = text(offer.seller,15,TEXT,true); top.addView(seller,new LinearLayout.LayoutParams(0,dp(46),1f));
-        TextView price = text(offer.priceText,18,GREEN,true); price.setGravity(Gravity.END|Gravity.CENTER_VERTICAL); top.addView(price,new LinearLayout.LayoutParams(dp(142),dp(46)));
-        if (!offer.detail.isEmpty()) { TextView d=text(shorten(offer.detail),12,MUTED,false); d.setMaxLines(2); LinearLayout.LayoutParams dpv=fullWidth(dp(44)); dpv.setMargins(0,dp(2),0,dp(7)); card.addView(d,dpv); }
-        Button go=new Button(this); go.setText("ÜRÜNE GİT"); go.setTextColor(Color.WHITE); go.setTextSize(13); go.setTypeface(Typeface.DEFAULT,Typeface.BOLD); go.setBackgroundColor(GREEN); go.setOnClickListener(v->openUrl(offer.url)); card.addView(go,fullWidth(dp(48)));
-        LinearLayout.LayoutParams cp=fullWidth(-2); cp.setMargins(0,dp(7),0,0); resultsContainer.addView(card,cp);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14), dp(12), dp(12), dp(12));
+        card.setBackgroundColor(Color.WHITE);
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        card.addView(top, fullWidth(dp(48)));
+
+        TextView rank = text(index == 0 ? "🥇" : (index + 1) + ".", index == 0 ? 22 : 18, TEXT, true);
+        top.addView(rank, new LinearLayout.LayoutParams(dp(46), dp(48)));
+
+        TextView source = text(offer.source, 14, TEXT, true);
+        top.addView(source, new LinearLayout.LayoutParams(0, dp(48), 1f));
+
+        TextView price = text(offer.priceText, 17, GREEN, true);
+        price.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        top.addView(price, new LinearLayout.LayoutParams(dp(145), dp(48)));
+
+        TextView product = text(shorten(offer.title, 120), 14, TEXT, true);
+        LinearLayout.LayoutParams pp = fullWidth(-2);
+        pp.setMargins(0, dp(2), 0, dp(4));
+        card.addView(product, pp);
+
+        TextView detail = text(shorten(offer.detail, 165), 12, MUTED, false);
+        detail.setMaxLines(2);
+        LinearLayout.LayoutParams dpv = fullWidth(dp(43));
+        dpv.setMargins(0, 0, 0, dp(7));
+        card.addView(detail, dpv);
+
+        Button go = new Button(this);
+        go.setText("ÜRÜNE GİT");
+        go.setTextColor(Color.WHITE);
+        go.setTextSize(13);
+        go.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        go.setBackgroundColor(GREEN);
+        go.setOnClickListener(v -> openUrl(offer.url));
+        card.addView(go, fullWidth(dp(48)));
+
+        LinearLayout.LayoutParams cp = fullWidth(-2);
+        cp.setMargins(0, dp(7), 0, 0);
+        resultsContainer.addView(card, cp);
     }
 
-    private void showFailure(String reason) {
-        stage=0; setSearching(false, reason); resultsContainer.removeAllViews();
-        TextView m=text("Yanlış fiyat göstermemek için bu sonuç listeye alınmadı. Arama sayfasını açıp ürünü kontrol edebilirsin.",14,TEXT,false); m.setPadding(0,dp(12),0,dp(10)); resultsContainer.addView(m,fullWidth(dp(86)));
-        Button b=new Button(this); b.setText("AKAKÇE ARAMASINI AÇ"); b.setTextColor(Color.WHITE); b.setBackgroundColor(GREEN); b.setOnClickListener(v->openUrl(sourceSearchUrl)); resultsContainer.addView(b,fullWidth(dp(52)));
+    private void showNoResults() {
+        resultsContainer.removeAllViews();
+        TextView m = text("Bu aramada kaynaklardan güvenilir bir fiyat eşleşmesi çıkaramadım. Yanlış ürün göstermek yerine sonucu boş bıraktım. Ürün adını marka + model + ölçü/kapasite ile biraz daha net yazabilirsin.", 14, TEXT, false);
+        m.setPadding(0, dp(14), 0, dp(12));
+        resultsContainer.addView(m, fullWidth(-2));
+
+        Button fallback = new Button(this);
+        fallback.setText("AKAKÇE'DE ARA");
+        fallback.setTextColor(Color.WHITE);
+        fallback.setBackgroundColor(GREEN);
+        fallback.setOnClickListener(v -> openUrl("https://www.akakce.com/arama/?q=" + Uri.encode(currentQuery)));
+        resultsContainer.addView(fallback, fullWidth(dp(52)));
     }
 
-    private void setSearching(boolean searching,String message) {
-        progressBar.setVisibility(searching?View.VISIBLE:View.GONE); searchButton.setEnabled(!searching); searchButton.setAlpha(searching?0.65f:1f); statusText.setText(message);
+    private void setSearching(boolean on, String message) {
+        progressBar.setVisibility(on ? View.VISIBLE : View.GONE);
+        searchButton.setEnabled(!on);
+        searchButton.setAlpha(on ? 0.65f : 1f);
+        statusText.setText(message);
     }
 
-    private TextView text(String value,int size,int color,boolean bold) {
-        TextView t=new TextView(this); t.setText(value); t.setTextSize(size); t.setTextColor(color); if(bold)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD); return t;
+    private TextView text(String value, float size, int color, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(value);
+        t.setTextSize(size);
+        t.setTextColor(color);
+        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        return t;
     }
 
-    private String shorten(String s) { String d=s.replaceAll("\\s+"," ").trim(); return d.length()>180?d.substring(0,180)+"…":d; }
+    private String shorten(String s, int max) {
+        String v = s == null ? "" : s.replaceAll("\\s+", " ").trim();
+        return v.length() > max ? v.substring(0, max) + "…" : v;
+    }
 
     private String decodeJsString(String value) {
-        if(value==null||"null".equals(value)||"undefined".equals(value))return null;
-        try{JSONArray a=new JSONArray("["+value+"]");return a.isNull(0)?null:a.optString(0,null);}catch(Exception e){return null;}
+        if (value == null || "null".equals(value) || "undefined".equals(value)) return null;
+        try {
+            JSONArray wrapper = new JSONArray("[" + value + "]");
+            return wrapper.isNull(0) ? null : wrapper.optString(0, null);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void openUrl(String url) {
-        if(url==null||url.trim().isEmpty())return;
-        try{startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(url)));}catch(ActivityNotFoundException e){Toast.makeText(this,"Bağlantıyı açacak tarayıcı bulunamadı.",Toast.LENGTH_SHORT).show();}
+        if (url == null || url.trim().isEmpty()) return;
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, "Bağlantıyı açacak tarayıcı bulunamadı.", Toast.LENGTH_SHORT).show();
+        }
     }
 
-    private LinearLayout.LayoutParams fullWidth(int height){return new LinearLayout.LayoutParams(-1,height);}
-    private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    private LinearLayout.LayoutParams fullWidth(int height) {
+        return new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, height);
+    }
 
-    @Override protected void onDestroy(){searchId++;handler.removeCallbacksAndMessages(null);if(webView!=null){webView.stopLoading();webView.destroy();}super.onDestroy();}
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    @Override
+    protected void onDestroy() {
+        searchId++;
+        scanning = false;
+        handler.removeCallbacksAndMessages(null);
+        if (webView != null) {
+            webView.stopLoading();
+            webView.destroy();
+        }
+        super.onDestroy();
+    }
 }
