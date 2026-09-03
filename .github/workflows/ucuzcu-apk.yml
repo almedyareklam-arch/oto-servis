@@ -27,6 +27,10 @@ jobs:
       - name: Install Android platform
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
+      - name: Apply V7 intent filter
+        working-directory: ucuzcu-android
+        run: python3 v7_patch.py
+
       - name: Download Gradle
         run: |
           curl -L -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.10.2-bin.zip
