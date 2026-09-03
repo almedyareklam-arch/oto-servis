@@ -135,7 +135,7 @@ public class MainActivity extends Activity {
         statusText.setPadding(dp(8), 0, 0, 0);
         statusRow.addView(statusText, new LinearLayout.LayoutParams(0, dp(58), 1f));
 
-        TextView info = text("V4 Beta • Çoklu kaynak taraması. Model/ölçü gibi sayı içeren ifadeler eşleşmeden sonuç kabul edilmez.", 12, Color.rgb(117, 126, 121), false);
+        TextView info = text("V5 Beta • Gerçek ürün fiyatı doğrulanır; kupon, indirim tutarı, taksit, beden ve benzeri yan rakamlar fiyat kabul edilmez.", 12, Color.rgb(117, 126, 121), false);
         LinearLayout.LayoutParams infop = fullWidth(-2);
         infop.setMargins(0, 0, 0, dp(12));
         root.addView(info, infop);
@@ -158,7 +158,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setLoadsImagesAutomatically(false);
         s.setBlockNetworkImage(true);
-        s.setUserAgentString("Mozilla/5.0 (Linux; Android 16; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Mobile Safari/537.36 Ucuzcu/0.4");
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 16; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Mobile Safari/537.36 Ucuzcu/0.5");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
@@ -237,19 +237,27 @@ public class MainActivity extends Activity {
         String script = "(function(){" +
                 "function n(s){return (s||'').toLocaleLowerCase('tr-TR').replace(/[\\-_\\/]+/g,' ').replace(/[^a-z0-9çğıöşü ]/gi,' ').replace(/\\s+/g,' ').trim();}" +
                 "function clean(s){return (s||'').replace(/\\s+/g,' ').trim();}" +
-                "function money(s){var m=s.match(/(\\d{1,3}(?:[.\\s]\\d{3})*(?:,\\d{2})?|\\d{2,9}(?:,\\d{2})?)\\s*(?:TL|₺)/i);if(!m)return null;var r=m[1].replace(/\\s/g,'');var num=parseFloat(r.replace(/\\./g,'').replace(',','.'));if(!isFinite(num)||num<1||num>100000000)return null;return {num:num,txt:m[1]+' TL'};}" +
+                "function number(raw){if(raw==null)return null;var s=(''+raw).replace(/\\s/g,'').replace(/TL|₺/gi,'');if(!s)return null;var v;if(s.indexOf(',')>=0)v=parseFloat(s.replace(/\\./g,'').replace(',','.'));else if((s.match(/\\./g)||[]).length>1)v=parseFloat(s.replace(/\\./g,''));else if(/^\\d{1,3}\\.\\d{3}$/.test(s))v=parseFloat(s.replace('.',''));else v=parseFloat(s);return isFinite(v)&&v>0&&v<100000000?v:null;}" +
+                "function moneyText(s){s=clean(s);var re=/(?:₺\\s*)?(\\d{1,3}(?:[.\\s]\\d{3})*(?:,\\d{2})?|\\d{1,9}(?:[.,]\\d{2})?)\\s*(?:TL|₺)/ig,m,out=[];while((m=re.exec(s))!==null){var v=number(m[1]);if(v)out.push({num:v,txt:v.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL',index:m.index,raw:m[0]});}return out;}" +
+                "function bad(s){return /kupon|indirim tutar|indirim kazan|kazan|taksit|ayda|puan|bonus|beden|numara|\\bkişi\\b|\\bgünde\\b|\\bgün\\b|son 30|en düşük fiyat|kargo bedel|teslimat ücret/i.test(s||'');}" +
+                "function cls(e){return clean(((e&&e.className)||'')+' '+((e&&e.id)||'')+' '+((e&&e.getAttribute&&e.getAttribute('data-testid'))||'')+' '+((e&&e.getAttribute&&e.getAttribute('data-test-id'))||''));}" +
+                "function priceOf(card){var cand=[];function add(e,bonus){if(!e)return;var raw=clean((e.getAttribute&&e.getAttribute('content'))||'');var txt=clean((e.innerText||e.textContent||'')+' '+((e.getAttribute&&e.getAttribute('aria-label'))||''));var vals=moneyText(txt);if(!vals.length&&raw){var rv=number(raw);if(rv)vals=[{num:rv,txt:rv.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' TL',index:0,raw:raw}];}for(var z=0;z<vals.length;z++){var meta=cls(e).toLowerCase();var score=bonus||0;score+=/price|fiyat|prc|amount|current/.test(meta)?35:0;score+=/dscntd|discounted|sale|selling|current|final|newprice|current-price/.test(meta)?35:0;score+=/old|original|strike|list-price|before/.test(meta)?-25:0;score+=(txt.indexOf('TL')>=0||txt.indexOf('₺')>=0)?15:0;score+=txt.length<45?10:0;var parent=e.parentElement;var ctx=txt;if(parent){var pt=clean(parent.innerText);if(pt.length<130)ctx+=' '+pt;}if(bad(ctx))score-=100;if(/coupon|kupon|installment|taksit|badge|saving/.test(meta))score-=100;cand.push({num:vals[z].num,txt:vals[z].txt,score:score});}}" +
+                "var special='';var src=" + source + ";if(src==='Trendyol')special='.prc-box-dscntd,.prc-box-sllng,[class*=prc-box]';else if(src==='Hepsiburada')special='[data-test-id*=price],[data-testid*=price]';else if(src==='Amazon Türkiye')special='.a-price .a-offscreen,.a-price';else if(src==='N11')special='.newPrice ins,.newPrice,[class*=price]';else special='[class*=price],[class*=Price],[data-testid*=price],[data-test*=price]';" +
+                "if(special)Array.prototype.slice.call(card.querySelectorAll(special)).slice(0,30).forEach(function(e){add(e,45);});" +
+                "Array.prototype.slice.call(card.querySelectorAll('[itemprop=price],[class*=price],[class*=Price],[class*=fiyat],[class*=Fiyat],[data-testid*=price],[data-test*=price]')).slice(0,40).forEach(function(e){add(e,25);});" +
+                "if(!cand.length){var full=clean(card.innerText);var vals=moneyText(full);for(var i=0;i<vals.length;i++){var a=Math.max(0,vals[i].index-45),b=Math.min(full.length,vals[i].index+vals[i].raw.length+45),ctx=full.substring(a,b);if(!bad(ctx))cand.push({num:vals[i].num,txt:vals[i].txt,score:5});}}" +
+                "cand=cand.filter(function(x){return x.score>-20;});cand.sort(function(a,b){return b.score-a.score||(a.num-b.num);});return cand.length?cand[0]:null;}" +
                 "var raw=n(" + q + ");var toks=raw.split(' ').filter(function(x){return x.length>0;});" +
                 "var stop={'en':1,'ucuz':1,'fiyat':1,'fiyati':1,'fiyatı':1,'urun':1,'ürün':1,'satın':1,'al':1,'yeni':1,'orijinal':1};" +
                 "var req=toks.filter(function(x){return !stop[x];});if(!req.length)req=toks;" +
                 "function match(txt){var h=n(txt);if(!h)return false;var hits=0,words=0;for(var i=0;i<req.length;i++){var tok=req[i],has=h.indexOf(tok)>=0;if(/[0-9]/.test(tok)&&!has)return false;if(!/[0-9]/.test(tok)){words++;if(has)hits++;}}var need=words<=1?Math.min(words,1):Math.ceil(words*0.6);return hits>=need;}" +
                 "var selector='article,li,[data-testid*=product],[data-test*=product],[class*=product],[class*=Product],[class*=prd],[class*=p-card],[class*=search-result],[class*=searchResult],[class*=s-result-item]';" +
                 "var nodes=Array.prototype.slice.call(document.querySelectorAll(selector));if(nodes.length>1200)nodes=nodes.slice(0,1200);var out=[],seen={};" +
-                "nodes.forEach(function(card){var txt=clean(card.innerText);if(txt.length<8||txt.length>1400)return;if(txt.indexOf('TL')<0&&txt.indexOf('₺')<0)return;var pr=money(txt);if(!pr)return;" +
-                "var te=card.querySelector('h1,h2,h3,h4,[data-testid*=title],[class*=title],[class*=Title],[class*=name],[class*=Name]');var title=clean(te?te.innerText:'');" +
-                "var links=Array.prototype.slice.call(card.querySelectorAll('a[href]'));if(!title){for(var a=0;a<links.length;a++){var at=clean(links[a].innerText);if(at.length>4&&at.length<220){title=at;break;}}}if(!title)title=txt.substring(0,180);" +
-                "if(!match(title+' '+txt.substring(0,450)))return;var href='';for(var j=0;j<links.length;j++){var u=links[j].href||'';if(/^https?:/i.test(u)){href=u;break;}}if(!href)href=location.href;" +
-                "var key=n(title).substring(0,100)+'|'+pr.num+'|'+href;if(seen[key])return;seen[key]=1;out.push({price:pr.num,priceText:pr.txt,source:" + source + ",title:title.substring(0,180),detail:txt.substring(0,240),url:href});" +
-                "});out.sort(function(a,b){return a.price-b.price;});return JSON.stringify(out.slice(0,6));})()";
+                "nodes.forEach(function(card){var txt=clean(card.innerText);if(txt.length<8||txt.length>1600)return;var te=card.querySelector('h1,h2,h3,h4,[data-testid*=title],[class*=title],[class*=Title],[class*=name],[class*=Name]');var title=clean(te?te.innerText:'');" +
+                "var links=Array.prototype.slice.call(card.querySelectorAll('a[href]'));if(!title){for(var a=0;a<links.length;a++){var at=clean(links[a].innerText);if(at.length>4&&at.length<220){title=at;break;}}}if(!title)title=txt.substring(0,180);if(!match(title+' '+txt.substring(0,500)))return;" +
+                "var pr=priceOf(card);if(!pr)return;var href='';for(var j=0;j<links.length;j++){var u=links[j].href||'';if(/^https?:/i.test(u)){href=u;break;}}if(!href)href=location.href;" +
+                "var key=n(title).substring(0,100)+'|'+Math.round(pr.num*100)+'|'+href;if(seen[key])return;seen[key]=1;out.push({price:pr.num,priceText:pr.txt,source:" + source + ",title:title.substring(0,180),detail:txt.substring(0,260),url:href});" +
+                "});out.sort(function(a,b){return a.price-b.price;});return JSON.stringify(out.slice(0,8));})()";
 
         webView.evaluateJavascript(script, value -> {
             if (id != searchId || !scanning || idx != sourceIndex) return;
@@ -293,7 +301,7 @@ public class MainActivity extends Activity {
             return;
         }
         if (finalList.size() > 10) finalList = new ArrayList<>(finalList.subList(0, 10));
-        setSearching(false, finalList.size() + " uygun fiyat bulundu • En ucuzdan pahalıya");
+        setSearching(false, finalList.size() + " doğrulanmış fiyat bulundu • En ucuzdan pahalıya");
         showOffers(finalList);
     }
 
@@ -307,6 +315,21 @@ public class MainActivity extends Activity {
             out.add(o);
         }
         Collections.sort(out, Comparator.comparingDouble(a -> a.price));
+        return removeExtremeLowOutliers(out);
+    }
+
+    private List<Offer> removeExtremeLowOutliers(List<Offer> sorted) {
+        if (sorted.size() < 5) return sorted;
+        List<Double> prices = new ArrayList<>();
+        for (Offer o : sorted) prices.add(o.price);
+        Collections.sort(prices);
+        double median = prices.get(prices.size() / 2);
+        if (median <= 0) return sorted;
+        List<Offer> out = new ArrayList<>();
+        for (Offer o : sorted) {
+            if (o.price < median * 0.18 && median - o.price > 150) continue;
+            out.add(o);
+        }
         return out;
     }
 
@@ -400,7 +423,7 @@ public class MainActivity extends Activity {
 
     private void showNoResults() {
         resultsContainer.removeAllViews();
-        TextView m = text("Bu aramada kaynaklardan güvenilir bir fiyat eşleşmesi çıkaramadım. Yanlış ürün göstermek yerine sonucu boş bıraktım. Ürün adını marka + model + ölçü/kapasite ile biraz daha net yazabilirsin.", 14, TEXT, false);
+        TextView m = text("Bu aramada kaynaklardan güvenilir bir fiyat eşleşmesi çıkaramadım. Yanlış ürün veya kupon fiyatı göstermek yerine sonucu boş bıraktım. Ürün adını marka + model + ölçü/kapasite ile biraz daha net yazabilirsin.", 14, TEXT, false);
         m.setPadding(0, dp(14), 0, dp(12));
         resultsContainer.addView(m, fullWidth(-2));
 
