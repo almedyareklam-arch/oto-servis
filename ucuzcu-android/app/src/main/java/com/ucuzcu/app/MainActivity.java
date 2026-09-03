@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
@@ -34,10 +35,14 @@ import java.util.Locale;
 import java.util.Set;
 
 public class MainActivity extends Activity {
-    private static final int GREEN = Color.rgb(16, 97, 62);
-    private static final int TEXT = Color.rgb(35, 43, 39);
+    private static final int GREEN = Color.rgb(15, 107, 71);
+    private static final int GREEN_DARK = Color.rgb(9, 78, 51);
+    private static final int GREEN_SOFT = Color.rgb(232, 246, 239);
+    private static final int TEXT = Color.rgb(30, 38, 34);
     private static final int MUTED = Color.rgb(99, 110, 104);
-    private static final int BG = Color.rgb(247, 249, 248);
+    private static final int BG = Color.rgb(246, 248, 247);
+    private static final int BORDER = Color.rgb(225, 231, 228);
+    private static final int GOLD = Color.rgb(224, 157, 31);
 
     private final String[][] sources = new String[][]{
             {"Akakçe", "https://www.akakce.com/arama/?q="},
@@ -75,7 +80,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setStatusBarColor(GREEN);
+        getWindow().setStatusBarColor(Color.WHITE);
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
         buildUi();
         prepareWebView();
     }
@@ -84,61 +90,107 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         scroll.setBackgroundColor(BG);
+        scroll.setClipToPadding(false);
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(26), dp(20), dp(36));
+        root.setPadding(dp(16), dp(20), dp(16), dp(36));
         scroll.addView(root, new ScrollView.LayoutParams(-1, -2));
 
-        TextView title = text("UCUZCU", 36, GREEN, true);
-        title.setGravity(Gravity.CENTER_HORIZONTAL);
-        root.addView(title, fullWidth(dp(58)));
+        LinearLayout brandRow = new LinearLayout(this);
+        brandRow.setOrientation(LinearLayout.HORIZONTAL);
+        brandRow.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(brandRow, fullWidth(dp(62)));
 
-        TextView subtitle = text("Ne arıyorsan yaz. Ucuzcu farklı kaynakları tarayıp en ucuz seçenekleri bulsun.", 16, Color.rgb(74, 88, 80), false);
-        subtitle.setGravity(Gravity.CENTER_HORIZONTAL);
-        LinearLayout.LayoutParams sp = fullWidth(-2);
-        sp.setMargins(0, dp(4), 0, dp(20));
-        root.addView(subtitle, sp);
+        TextView mark = text("₺", 24, Color.WHITE, true);
+        mark.setGravity(Gravity.CENTER);
+        mark.setBackground(oval(GREEN));
+        LinearLayout.LayoutParams markParams = new LinearLayout.LayoutParams(dp(48), dp(48));
+        markParams.setMargins(0, 0, dp(12), 0);
+        brandRow.addView(mark, markParams);
+
+        LinearLayout brandText = new LinearLayout(this);
+        brandText.setOrientation(LinearLayout.VERTICAL);
+        brandText.setGravity(Gravity.CENTER_VERTICAL);
+        brandRow.addView(brandText, new LinearLayout.LayoutParams(0, dp(58), 1f));
+
+        TextView title = text("Ucuzcu", 29, GREEN_DARK, true);
+        brandText.addView(title, fullWidth(dp(36)));
+        TextView tagline = text("En ucuzu bul. Fazla ödeme.", 12, MUTED, false);
+        brandText.addView(tagline, fullWidth(dp(22)));
+
+        TextView sourceCount = chip("6 KAYNAK", GREEN_SOFT, GREEN_DARK);
+        brandRow.addView(sourceCount, new LinearLayout.LayoutParams(dp(92), dp(34)));
+
+        LinearLayout searchCard = new LinearLayout(this);
+        searchCard.setOrientation(LinearLayout.VERTICAL);
+        searchCard.setPadding(dp(14), dp(13), dp(14), dp(14));
+        searchCard.setBackground(rounded(Color.WHITE, 18, BORDER, 1));
+        LinearLayout.LayoutParams searchCardParams = fullWidth(-2);
+        searchCardParams.setMargins(0, dp(12), 0, 0);
+        root.addView(searchCard, searchCardParams);
+
+        TextView searchLabel = text("NE ARIYORSUN?", 11, MUTED, true);
+        searchCard.addView(searchLabel, fullWidth(dp(24)));
 
         searchInput = new EditText(this);
-        searchInput.setHint("Örn: Bosch matkap, Nike Air Max 42, Samsung S26");
+        searchInput.setHint("Ürün, marka veya model yaz...");
+        searchInput.setHintTextColor(Color.rgb(150, 158, 154));
+        searchInput.setTextColor(TEXT);
         searchInput.setTextSize(17);
         searchInput.setSingleLine(true);
-        searchInput.setPadding(dp(16), 0, dp(16), 0);
-        searchInput.setBackgroundColor(Color.WHITE);
-        LinearLayout.LayoutParams ip = fullWidth(dp(60));
-        ip.setMargins(0, 0, 0, dp(12));
-        root.addView(searchInput, ip);
+        searchInput.setPadding(dp(14), 0, dp(14), 0);
+        searchInput.setBackground(rounded(Color.rgb(249, 250, 250), 13, BORDER, 1));
+        LinearLayout.LayoutParams ip = fullWidth(dp(56));
+        ip.setMargins(0, dp(2), 0, dp(10));
+        searchCard.addView(searchInput, ip);
 
         searchButton = new Button(this);
         searchButton.setText("EN UCUZ 10'U BUL");
-        searchButton.setTextSize(16);
+        searchButton.setTextSize(15);
         searchButton.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         searchButton.setTextColor(Color.WHITE);
-        searchButton.setBackgroundColor(GREEN);
+        searchButton.setAllCaps(false);
+        searchButton.setBackground(rounded(GREEN, 13, GREEN, 0));
         searchButton.setOnClickListener(v -> startSearch());
-        root.addView(searchButton, fullWidth(dp(58)));
+        searchCard.addView(searchButton, fullWidth(dp(54)));
+
+        LinearLayout trustRow = new LinearLayout(this);
+        trustRow.setOrientation(LinearLayout.HORIZONTAL);
+        trustRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams trustParams = fullWidth(dp(38));
+        trustParams.setMargins(0, dp(9), 0, 0);
+        root.addView(trustRow, trustParams);
+
+        TextView verified = text("✓ Doğrulanmış fiyat", 11, GREEN_DARK, true);
+        verified.setGravity(Gravity.CENTER);
+        verified.setBackground(rounded(GREEN_SOFT, 18, GREEN_SOFT, 0));
+        trustRow.addView(verified, new LinearLayout.LayoutParams(0, dp(30), 1f));
+
+        TextView spacer = new TextView(this);
+        trustRow.addView(spacer, new LinearLayout.LayoutParams(dp(8), dp(1)));
+
+        TextView sorted = text("↕ En ucuzdan pahalıya", 11, MUTED, true);
+        sorted.setGravity(Gravity.CENTER);
+        sorted.setBackground(rounded(Color.WHITE, 18, BORDER, 1));
+        trustRow.addView(sorted, new LinearLayout.LayoutParams(0, dp(30), 1f));
 
         LinearLayout statusRow = new LinearLayout(this);
         statusRow.setOrientation(LinearLayout.HORIZONTAL);
         statusRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams srp = fullWidth(dp(58));
-        srp.setMargins(0, dp(12), 0, dp(4));
+        LinearLayout.LayoutParams srp = fullWidth(dp(46));
+        srp.setMargins(0, dp(5), 0, dp(2));
         root.addView(statusRow, srp);
 
         progressBar = new ProgressBar(this);
         progressBar.setIndeterminate(true);
         progressBar.setVisibility(View.GONE);
-        statusRow.addView(progressBar, new LinearLayout.LayoutParams(dp(34), dp(34)));
+        statusRow.addView(progressBar, new LinearLayout.LayoutParams(dp(28), dp(28)));
 
-        statusText = text("Hazır. Aradığın ürünü yaz.", 13, MUTED, false);
-        statusText.setPadding(dp(8), 0, 0, 0);
-        statusRow.addView(statusText, new LinearLayout.LayoutParams(0, dp(58), 1f));
-
-        TextView info = text("V5 Beta • Gerçek ürün fiyatı doğrulanır; kupon, indirim tutarı, taksit, beden ve benzeri yan rakamlar fiyat kabul edilmez.", 12, Color.rgb(117, 126, 121), false);
-        LinearLayout.LayoutParams infop = fullWidth(-2);
-        infop.setMargins(0, 0, 0, dp(12));
-        root.addView(info, infop);
+        statusText = text("Hazır. Aradığın ürünü yaz.", 12, MUTED, false);
+        statusText.setGravity(Gravity.CENTER_VERTICAL);
+        statusText.setPadding(dp(6), 0, 0, 0);
+        statusRow.addView(statusText, new LinearLayout.LayoutParams(0, dp(46), 1f));
 
         resultsContainer = new LinearLayout(this);
         resultsContainer.setOrientation(LinearLayout.VERTICAL);
@@ -158,7 +210,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setLoadsImagesAutomatically(false);
         s.setBlockNetworkImage(true);
-        s.setUserAgentString("Mozilla/5.0 (Linux; Android 16; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Mobile Safari/537.36 Ucuzcu/0.5");
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 16; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Mobile Safari/537.36 Ucuzcu/0.6");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
@@ -176,10 +228,48 @@ public class MainActivity extends Activity {
 
     private void showWelcome() {
         resultsContainer.removeAllViews();
-        TextView t = text("🔎 İstediğin ürünü normal şekilde yaz.\nÖrnek: 205 55 R16 lastik • A4 kağıt 80 gr • Philips kahve makinesi", 15, Color.rgb(62, 72, 67), false);
-        t.setGravity(Gravity.CENTER_HORIZONTAL);
-        t.setPadding(0, dp(24), 0, dp(8));
-        resultsContainer.addView(t, fullWidth(dp(100)));
+
+        LinearLayout welcome = new LinearLayout(this);
+        welcome.setOrientation(LinearLayout.VERTICAL);
+        welcome.setPadding(dp(16), dp(16), dp(16), dp(16));
+        welcome.setBackground(rounded(Color.WHITE, 17, BORDER, 1));
+        LinearLayout.LayoutParams wp = fullWidth(-2);
+        wp.setMargins(0, dp(6), 0, 0);
+        resultsContainer.addView(welcome, wp);
+
+        TextView wTitle = text("Tek arama, en ucuz seçenekler", 17, TEXT, true);
+        welcome.addView(wTitle, fullWidth(dp(30)));
+
+        TextView wDesc = text("Ucuzcu farklı kaynaklardaki ürünleri karşılaştırır, yanlış eşleşmeleri ve şüpheli fiyatları eler.", 13, MUTED, false);
+        wDesc.setLineSpacing(0, 1.1f);
+        LinearLayout.LayoutParams wdp = fullWidth(-2);
+        wdp.setMargins(0, dp(3), 0, dp(13));
+        welcome.addView(wDesc, wdp);
+
+        addFeatureRow(welcome, "01", "Ürünü normal şekilde yaz", "Nike ayakkabı, Samsung S26, Bosch matkap...");
+        addFeatureRow(welcome, "02", "6 kaynağı otomatik tara", "Akakçe, Cimri ve büyük pazar yerleri");
+        addFeatureRow(welcome, "03", "En ucuz 10'u sırala", "Doğrulanmış sonuçları tek listede gör");
+    }
+
+    private void addFeatureRow(LinearLayout parent, String no, String title, String desc) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rp = fullWidth(dp(56));
+        rp.setMargins(0, dp(2), 0, 0);
+        parent.addView(row, rp);
+
+        TextView badge = text(no, 11, GREEN_DARK, true);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(rounded(GREEN_SOFT, 10, GREEN_SOFT, 0));
+        row.addView(badge, new LinearLayout.LayoutParams(dp(40), dp(40)));
+
+        LinearLayout txt = new LinearLayout(this);
+        txt.setOrientation(LinearLayout.VERTICAL);
+        txt.setPadding(dp(11), 0, 0, 0);
+        row.addView(txt, new LinearLayout.LayoutParams(0, dp(50), 1f));
+        txt.addView(text(title, 13, TEXT, true), fullWidth(dp(25)));
+        txt.addView(text(desc, 11, MUTED, false), fullWidth(dp(23)));
     }
 
     private void startSearch() {
@@ -296,12 +386,12 @@ public class MainActivity extends Activity {
         extracting = false;
         List<Offer> finalList = cleanAndSort(collected);
         if (finalList.isEmpty()) {
-            setSearching(false, "Otomatik fiyat sonucu bulunamadı.");
+            setSearching(false, "Güvenilir fiyat sonucu bulunamadı.");
             showNoResults();
             return;
         }
         if (finalList.size() > 10) finalList = new ArrayList<>(finalList.subList(0, 10));
-        setSearching(false, finalList.size() + " doğrulanmış fiyat bulundu • En ucuzdan pahalıya");
+        setSearching(false, finalList.size() + " doğrulanmış fiyat • En ucuzdan pahalıya");
         showOffers(finalList);
     }
 
@@ -367,78 +457,156 @@ public class MainActivity extends Activity {
 
     private void showOffers(List<Offer> offers) {
         resultsContainer.removeAllViews();
-        TextView heading = text("“" + currentQuery + "” için en ucuz sonuçlar", 19, TEXT, true);
-        LinearLayout.LayoutParams hp = fullWidth(-2);
-        hp.setMargins(0, dp(8), 0, dp(5));
-        resultsContainer.addView(heading, hp);
 
-        for (int i = 0; i < offers.size(); i++) addOfferCard(i, offers.get(i));
+        LinearLayout summary = new LinearLayout(this);
+        summary.setOrientation(LinearLayout.HORIZONTAL);
+        summary.setGravity(Gravity.CENTER_VERTICAL);
+        summary.setPadding(dp(14), dp(10), dp(12), dp(10));
+        summary.setBackground(rounded(Color.WHITE, 15, BORDER, 1));
+        LinearLayout.LayoutParams smp = fullWidth(dp(66));
+        smp.setMargins(0, dp(5), 0, dp(8));
+        resultsContainer.addView(summary, smp);
+
+        LinearLayout summaryText = new LinearLayout(this);
+        summaryText.setOrientation(LinearLayout.VERTICAL);
+        summary.addView(summaryText, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        summaryText.addView(text("“" + shorten(currentQuery, 35) + "”", 15, TEXT, true), fullWidth(dp(26)));
+        summaryText.addView(text(offers.size() + " doğrulanmış sonuç bulundu", 11, MUTED, false), fullWidth(dp(21)));
+
+        TextView order = chip("FİYAT ↑", GREEN_SOFT, GREEN_DARK);
+        summary.addView(order, new LinearLayout.LayoutParams(dp(82), dp(32)));
+
+        for (int i = 0; i < offers.size(); i++) {
+            double nextPrice = (i == 0 && offers.size() > 1) ? offers.get(1).price : -1;
+            addOfferCard(i, offers.get(i), nextPrice);
+        }
     }
 
-    private void addOfferCard(int index, Offer offer) {
+    private void addOfferCard(int index, Offer offer, double nextPrice) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(14), dp(12), dp(12), dp(12));
-        card.setBackgroundColor(Color.WHITE);
-
-        LinearLayout top = new LinearLayout(this);
-        top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        card.addView(top, fullWidth(dp(48)));
-
-        TextView rank = text(index == 0 ? "🥇" : (index + 1) + ".", index == 0 ? 22 : 18, TEXT, true);
-        top.addView(rank, new LinearLayout.LayoutParams(dp(46), dp(48)));
-
-        TextView source = text(offer.source, 14, TEXT, true);
-        top.addView(source, new LinearLayout.LayoutParams(0, dp(48), 1f));
-
-        TextView price = text(offer.priceText, 17, GREEN, true);
-        price.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        top.addView(price, new LinearLayout.LayoutParams(dp(145), dp(48)));
-
-        TextView product = text(shorten(offer.title, 120), 14, TEXT, true);
-        LinearLayout.LayoutParams pp = fullWidth(-2);
-        pp.setMargins(0, dp(2), 0, dp(4));
-        card.addView(product, pp);
-
-        TextView detail = text(shorten(offer.detail, 165), 12, MUTED, false);
-        detail.setMaxLines(2);
-        LinearLayout.LayoutParams dpv = fullWidth(dp(43));
-        dpv.setMargins(0, 0, 0, dp(7));
-        card.addView(detail, dpv);
-
-        Button go = new Button(this);
-        go.setText("ÜRÜNE GİT");
-        go.setTextColor(Color.WHITE);
-        go.setTextSize(13);
-        go.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        go.setBackgroundColor(GREEN);
-        go.setOnClickListener(v -> openUrl(offer.url));
-        card.addView(go, fullWidth(dp(48)));
+        card.setPadding(dp(14), dp(13), dp(14), dp(13));
+        card.setBackground(rounded(Color.WHITE, 17, index == 0 ? GREEN : BORDER, index == 0 ? 2 : 1));
 
         LinearLayout.LayoutParams cp = fullWidth(-2);
         cp.setMargins(0, dp(7), 0, 0);
         resultsContainer.addView(card, cp);
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        card.addView(top, fullWidth(dp(36)));
+
+        if (index == 0) {
+            TextView best = chip("★ EN UCUZ", GREEN, Color.WHITE);
+            top.addView(best, new LinearLayout.LayoutParams(dp(104), dp(30)));
+        } else {
+            TextView rank = chip((index + 1) + ". SIRA", Color.rgb(245, 247, 246), MUTED);
+            top.addView(rank, new LinearLayout.LayoutParams(dp(76), dp(30)));
+        }
+
+        TextView flex = new TextView(this);
+        top.addView(flex, new LinearLayout.LayoutParams(0, dp(1), 1f));
+
+        TextView source = chip(offer.source.toUpperCase(new Locale("tr", "TR")), GREEN_SOFT, GREEN_DARK);
+        top.addView(source, new LinearLayout.LayoutParams(dp(sourceWidth(offer.source)), dp(30)));
+
+        TextView product = text(shorten(offer.title, 120), 15, TEXT, true);
+        product.setMaxLines(2);
+        product.setLineSpacing(0, 1.04f);
+        LinearLayout.LayoutParams pp = fullWidth(-2);
+        pp.setMargins(0, dp(10), 0, dp(5));
+        card.addView(product, pp);
+
+        TextView price = text(offer.priceText, 24, GREEN_DARK, true);
+        LinearLayout.LayoutParams priceParams = fullWidth(dp(38));
+        card.addView(price, priceParams);
+
+        if (index == 0 && nextPrice > offer.price) {
+            double saving = nextPrice - offer.price;
+            TextView savingText = text("Sonraki fiyata göre " + formatPrice(saving) + " daha ucuz", 11, GREEN_DARK, true);
+            savingText.setGravity(Gravity.CENTER_VERTICAL);
+            savingText.setPadding(dp(9), 0, dp(9), 0);
+            savingText.setBackground(rounded(GREEN_SOFT, 10, GREEN_SOFT, 0));
+            LinearLayout.LayoutParams svp = fullWidth(dp(30));
+            svp.setMargins(0, dp(2), 0, dp(8));
+            card.addView(savingText, svp);
+        }
+
+        TextView detail = text(shorten(cleanDetail(offer.detail), 150), 11, MUTED, false);
+        detail.setMaxLines(2);
+        detail.setLineSpacing(0, 1.08f);
+        LinearLayout.LayoutParams detailParams = fullWidth(-2);
+        detailParams.setMargins(0, dp(2), 0, dp(11));
+        card.addView(detail, detailParams);
+
+        LinearLayout bottom = new LinearLayout(this);
+        bottom.setOrientation(LinearLayout.HORIZONTAL);
+        bottom.setGravity(Gravity.CENTER_VERTICAL);
+        card.addView(bottom, fullWidth(dp(44)));
+
+        TextView safe = text("✓ Fiyat doğrulandı", 11, MUTED, true);
+        safe.setGravity(Gravity.CENTER_VERTICAL);
+        bottom.addView(safe, new LinearLayout.LayoutParams(0, dp(40), 1f));
+
+        Button go = new Button(this);
+        go.setText("Siteye Git  →");
+        go.setTextColor(Color.WHITE);
+        go.setTextSize(12);
+        go.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        go.setAllCaps(false);
+        go.setPadding(dp(8), 0, dp(8), 0);
+        go.setBackground(rounded(index == 0 ? GREEN : GREEN_DARK, 11, GREEN, 0));
+        go.setOnClickListener(v -> openUrl(offer.url));
+        bottom.addView(go, new LinearLayout.LayoutParams(dp(126), dp(42)));
+    }
+
+    private int sourceWidth(String source) {
+        if (source == null) return 90;
+        int w = 58 + source.length() * 5;
+        return Math.max(82, Math.min(130, w));
     }
 
     private void showNoResults() {
         resultsContainer.removeAllViews();
-        TextView m = text("Bu aramada kaynaklardan güvenilir bir fiyat eşleşmesi çıkaramadım. Yanlış ürün veya kupon fiyatı göstermek yerine sonucu boş bıraktım. Ürün adını marka + model + ölçü/kapasite ile biraz daha net yazabilirsin.", 14, TEXT, false);
-        m.setPadding(0, dp(14), 0, dp(12));
-        resultsContainer.addView(m, fullWidth(-2));
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(17), dp(18), dp(17), dp(18));
+        card.setBackground(rounded(Color.WHITE, 17, BORDER, 1));
+        LinearLayout.LayoutParams cp = fullWidth(-2);
+        cp.setMargins(0, dp(7), 0, 0);
+        resultsContainer.addView(card, cp);
+
+        TextView icon = text("⌕", 30, GREEN, true);
+        icon.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.addView(icon, fullWidth(dp(42)));
+
+        TextView title = text("Güvenilir sonuç bulamadım", 17, TEXT, true);
+        title.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.addView(title, fullWidth(dp(32)));
+
+        TextView m = text("Yanlış ürün veya kupon fiyatı göstermek yerine sonucu boş bıraktım. Marka + model + ölçü/kapasite ile biraz daha net arayabilirsin.", 13, MUTED, false);
+        m.setGravity(Gravity.CENTER_HORIZONTAL);
+        m.setLineSpacing(0, 1.1f);
+        LinearLayout.LayoutParams mp = fullWidth(-2);
+        mp.setMargins(0, dp(4), 0, dp(14));
+        card.addView(m, mp);
 
         Button fallback = new Button(this);
-        fallback.setText("AKAKÇE'DE ARA");
+        fallback.setText("Akakçe'de Ara  →");
         fallback.setTextColor(Color.WHITE);
-        fallback.setBackgroundColor(GREEN);
+        fallback.setTextSize(13);
+        fallback.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        fallback.setAllCaps(false);
+        fallback.setBackground(rounded(GREEN, 12, GREEN, 0));
         fallback.setOnClickListener(v -> openUrl("https://www.akakce.com/arama/?q=" + Uri.encode(currentQuery)));
-        resultsContainer.addView(fallback, fullWidth(dp(52)));
+        card.addView(fallback, fullWidth(dp(50)));
     }
 
     private void setSearching(boolean on, String message) {
         progressBar.setVisibility(on ? View.VISIBLE : View.GONE);
         searchButton.setEnabled(!on);
-        searchButton.setAlpha(on ? 0.65f : 1f);
+        searchButton.setAlpha(on ? 0.72f : 1f);
         statusText.setText(message);
     }
 
@@ -451,9 +619,42 @@ public class MainActivity extends Activity {
         return t;
     }
 
+    private TextView chip(String value, int bg, int fg) {
+        TextView t = text(value, 10, fg, true);
+        t.setGravity(Gravity.CENTER);
+        t.setSingleLine(true);
+        t.setBackground(rounded(bg, 20, bg, 0));
+        return t;
+    }
+
+    private GradientDrawable rounded(int color, int radius, int strokeColor, int strokeWidth) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(radius));
+        if (strokeWidth > 0) d.setStroke(dp(strokeWidth), strokeColor);
+        return d;
+    }
+
+    private GradientDrawable oval(int color) {
+        GradientDrawable d = new GradientDrawable();
+        d.setShape(GradientDrawable.OVAL);
+        d.setColor(color);
+        return d;
+    }
+
     private String shorten(String s, int max) {
         String v = s == null ? "" : s.replaceAll("\\s+", " ").trim();
         return v.length() > max ? v.substring(0, max) + "…" : v;
+    }
+
+    private String cleanDetail(String s) {
+        String v = s == null ? "" : s.replaceAll("\\s+", " ").trim();
+        v = v.replaceAll("(?i)en ucuz", "").replaceAll("(?i)fiyat", "").replaceAll("\\s+", " ").trim();
+        return v;
+    }
+
+    private String formatPrice(double price) {
+        return String.format(new Locale("tr", "TR"), "%,.2f TL", price);
     }
 
     private String decodeJsString(String value) {
